@@ -6,14 +6,15 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId") || session.user.id;
 
-  if (userId !== session.user.id && session.user.role !== "MANAGER") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Employees can only see their own entries; admin can see any
+  if (userId !== session.user.id && session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
   }
 
   const startDate = searchParams.get("startDate");
@@ -37,7 +38,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  if (session.user.role !== "EMPLOYEE") {
+    return NextResponse.json({ error: "Solo empleados pueden registrar asistencia" }, { status: 403 });
   }
 
   const body = await req.json();
@@ -45,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const validTypes = ["CLOCK_IN", "LUNCH_OUT", "LUNCH_IN", "CLOCK_OUT"];
   if (!validTypes.includes(type)) {
-    return NextResponse.json({ error: "Invalid type" }, { status: 400 });
+    return NextResponse.json({ error: "Tipo de registro inválido" }, { status: 400 });
   }
 
   const todayStart = new Date();
@@ -64,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   if (!allowedActions.includes(type)) {
     return NextResponse.json(
-      { error: `Invalid action. Allowed: ${allowedActions.map(formatActionLabel).join(", ")}` },
+      { error: `Acción no permitida. Permitidas: ${allowedActions.map(formatActionLabel).join(", ")}` },
       { status: 400 }
     );
   }
@@ -96,10 +101,10 @@ function getAllowedActions(lastType: string | undefined): string[] {
 
 function formatActionLabel(type: string): string {
   switch (type) {
-    case "CLOCK_IN": return "Clock In";
-    case "LUNCH_OUT": return "Out for Lunch";
-    case "LUNCH_IN": return "Back from Lunch";
-    case "CLOCK_OUT": return "Clock Out";
+    case "CLOCK_IN": return "Entrada";
+    case "LUNCH_OUT": return "Salida Almuerzo";
+    case "LUNCH_IN": return "Regreso Almuerzo";
+    case "CLOCK_OUT": return "Salida";
     default: return type;
   }
 }

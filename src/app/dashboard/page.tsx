@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface TimeEntry {
   id: string;
@@ -16,25 +17,25 @@ const ACTION_CONFIG: Record<
   { label: string; color: string; hoverColor: string; icon: string }
 > = {
   CLOCK_IN: {
-    label: "Clock In",
+    label: "Entrada",
     color: "bg-green-600",
     hoverColor: "hover:bg-green-700",
     icon: "-->",
   },
   LUNCH_OUT: {
-    label: "Out for Lunch",
+    label: "Salida Almuerzo",
     color: "bg-yellow-500",
     hoverColor: "hover:bg-yellow-600",
     icon: "...",
   },
   LUNCH_IN: {
-    label: "Back from Lunch",
+    label: "Regreso Almuerzo",
     color: "bg-orange-500",
     hoverColor: "hover:bg-orange-600",
     icon: "<--",
   },
   CLOCK_OUT: {
-    label: "Clock Out",
+    label: "Salida",
     color: "bg-red-600",
     hoverColor: "hover:bg-red-700",
     icon: "[x]",
@@ -50,10 +51,10 @@ function getAvailableActions(lastType: string | undefined): string[] {
 }
 
 function getStatusMessage(lastType: string | undefined): string {
-  if (!lastType || lastType === "CLOCK_OUT") return "Not clocked in";
-  if (lastType === "CLOCK_IN" || lastType === "LUNCH_IN") return "Working";
-  if (lastType === "LUNCH_OUT") return "On Lunch Break";
-  return "Unknown";
+  if (!lastType || lastType === "CLOCK_OUT") return "No registrado";
+  if (lastType === "CLOCK_IN" || lastType === "LUNCH_IN") return "Trabajando";
+  if (lastType === "LUNCH_OUT") return "En Almuerzo";
+  return "Desconocido";
 }
 
 function getStatusColor(lastType: string | undefined): string {
@@ -88,14 +89,20 @@ export default function DashboardPage() {
       router.push("/login");
       return;
     }
-    if (status === "authenticated" && !hasFetched.current) {
-      hasFetched.current = true;
-      fetchTodayEntries().then((data) => {
-        setEntries(data);
-        setLoading(false);
-      });
+    if (status === "authenticated") {
+      if (session.user.role === "ADMIN") {
+        router.push("/admin");
+        return;
+      }
+      if (!hasFetched.current) {
+        hasFetched.current = true;
+        fetchTodayEntries().then((data) => {
+          setEntries(data);
+          setLoading(false);
+        });
+      }
     }
-  }, [status, router]);
+  }, [status, session, router]);
 
   async function refreshEntries() {
     const data = await fetchTodayEntries();
@@ -113,7 +120,7 @@ export default function DashboardPage() {
 
     if (!res.ok) {
       const data = await res.json();
-      setError(data.error || "Failed to record action");
+      setError(data.error || "Error al registrar");
     } else {
       await refreshEntries();
     }
@@ -123,7 +130,7 @@ export default function DashboardPage() {
   if (status === "loading" || loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-gray-500 text-lg">Loading...</div>
+        <div className="text-gray-500 text-lg">Cargando...</div>
       </div>
     );
   }
@@ -139,24 +146,24 @@ export default function DashboardPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">
-          Welcome, {session.user.name}
+          Bienvenido, {session.user.name}
         </h1>
         <p className="text-gray-500 mt-1">
-          {format(new Date(), "EEEE, MMMM d, yyyy")}
+          {format(new Date(), "EEEE, d 'de' MMMM, yyyy", { locale: es })}
         </p>
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="text-center mb-6">
           <p className="text-sm text-gray-500 uppercase tracking-wide">
-            Current Status
+            Estado Actual
           </p>
           <p className={`text-2xl font-bold mt-1 ${statusColor}`}>
             {statusMessage}
           </p>
           {lastEntry && (
             <p className="text-sm text-gray-400 mt-1">
-              Last action: {ACTION_CONFIG[lastEntry.type]?.label} at{" "}
+              Última acción: {ACTION_CONFIG[lastEntry.type]?.label} a las{" "}
               {format(new Date(lastEntry.timestamp), "h:mm a")}
             </p>
           )}
@@ -188,11 +195,11 @@ export default function DashboardPage() {
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Today&apos;s Activity
+          Actividad de Hoy
         </h2>
         {entries.length === 0 ? (
           <p className="text-gray-500 text-center py-4">
-            No activity recorded today
+            No hay actividad registrada hoy
           </p>
         ) : (
           <div className="space-y-3">

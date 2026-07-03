@@ -25,7 +25,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Invalid email or password");
+      setError("Email o contraseña incorrectos");
     } else {
       router.push("/dashboard");
       router.refresh();
@@ -36,8 +36,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">TimeTracker</h1>
-          <p className="text-gray-500 mt-2">Sign in to track your work hours</p>
+          <h1 className="text-3xl font-bold text-gray-900">GuevaraTech</h1>
+          <p className="text-gray-500 mt-2">Control de Asistencia</p>
         </div>
         <form
           onSubmit={handleSubmit}
@@ -58,13 +58,13 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-              placeholder="you@company.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900"
+              placeholder="correo@empresa.com"
             />
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
+              Contraseña
             </label>
             <input
               id="password"
@@ -72,22 +72,17 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-              placeholder="Enter your password"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900"
+              placeholder="Ingrese su contraseña"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Ingresando..." : "Ingresar"}
           </button>
-          <div className="text-xs text-gray-400 text-center space-y-1">
-            <p>Demo accounts:</p>
-            <p>Manager: manager@company.com / password123</p>
-            <p>Employee: john@company.com / password123</p>
-          </div>
         </form>
       </div>
     </div>

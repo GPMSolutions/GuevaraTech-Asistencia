@@ -6,68 +6,76 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const password = await hash("password123", 12);
+  const adminPassword = await hash("admin123", 12);
+  const employeePassword = await hash("empleado123", 12);
 
-  const manager = await prisma.user.upsert({
-    where: { email: "manager@company.com" },
+  // Create admin
+  const admin = await prisma.user.upsert({
+    where: { email: "admin@guevaratech.com" },
     update: {},
     create: {
-      email: "manager@company.com",
-      name: "Sarah Manager",
-      password,
-      role: "MANAGER",
-      department: "Operations",
+      email: "admin@guevaratech.com",
+      name: "Administrador",
+      password: adminPassword,
+      role: "ADMIN",
+      monthlySalary: 0,
     },
   });
 
-  const john = await prisma.user.upsert({
-    where: { email: "john@company.com" },
+  // Create sample employees
+  const emp1 = await prisma.user.upsert({
+    where: { email: "carlos@guevaratech.com" },
     update: {},
     create: {
-      email: "john@company.com",
-      name: "John Smith",
-      password,
+      email: "carlos@guevaratech.com",
+      name: "Carlos Pérez",
+      password: employeePassword,
       role: "EMPLOYEE",
-      department: "Engineering",
+      monthlySalary: 1130.0,
     },
   });
 
-  const jane = await prisma.user.upsert({
-    where: { email: "jane@company.com" },
+  const emp2 = await prisma.user.upsert({
+    where: { email: "maria@guevaratech.com" },
     update: {},
     create: {
-      email: "jane@company.com",
-      name: "Jane Doe",
-      password,
+      email: "maria@guevaratech.com",
+      name: "María García",
+      password: employeePassword,
       role: "EMPLOYEE",
-      department: "Design",
+      monthlySalary: 1130.0,
     },
   });
 
-  const mike = await prisma.user.upsert({
-    where: { email: "mike@company.com" },
+  const emp3 = await prisma.user.upsert({
+    where: { email: "juan@guevaratech.com" },
     update: {},
     create: {
-      email: "mike@company.com",
-      name: "Mike Johnson",
-      password,
+      email: "juan@guevaratech.com",
+      name: "Juan López",
+      password: employeePassword,
       role: "EMPLOYEE",
-      department: "Engineering",
+      monthlySalary: 1130.0,
     },
   });
 
-  const employees = [john, jane, mike];
+  const employees = [emp1, emp2, emp3];
   const now = new Date();
 
+  // Generate sample attendance for the past 2 weeks (Mon-Sat only)
   for (const emp of employees) {
-    for (let dayOffset = 6; dayOffset >= 1; dayOffset--) {
+    for (let dayOffset = 13; dayOffset >= 1; dayOffset--) {
       const day = new Date(now);
       day.setDate(now.getDate() - dayOffset);
 
-      if (day.getDay() === 0 || day.getDay() === 6) continue;
+      // Skip Sundays (day 0)
+      if (day.getDay() === 0) continue;
+
+      // Randomly skip a day (simulate absences)
+      if (Math.random() < 0.1) continue;
 
       const clockIn = new Date(day);
-      clockIn.setHours(8 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 30), 0, 0);
+      clockIn.setHours(8 + Math.floor(Math.random() * 1), Math.floor(Math.random() * 30), 0, 0);
 
       const lunchOut = new Date(day);
       lunchOut.setHours(12, Math.floor(Math.random() * 30), 0, 0);
@@ -76,7 +84,7 @@ async function main() {
       lunchIn.setHours(13, Math.floor(Math.random() * 15), 0, 0);
 
       const clockOut = new Date(day);
-      clockOut.setHours(17 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 30), 0, 0);
+      clockOut.setHours(17, Math.floor(Math.random() * 30), 0, 0);
 
       await prisma.timeEntry.createMany({
         data: [
@@ -89,7 +97,10 @@ async function main() {
     }
   }
 
-  console.log("Seeded:", { manager: manager.email, employees: employees.map(e => e.email) });
+  console.log("Seed completado:", {
+    admin: admin.email,
+    empleados: employees.map((e) => e.email),
+  });
 }
 
 main()

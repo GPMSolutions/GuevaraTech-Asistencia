@@ -14,11 +14,11 @@ interface DaySummary {
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  if (session.user.role !== "MANAGER") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -46,20 +46,21 @@ export async function GET(req: NextRequest) {
   const employees = await prisma.user.findMany({
     where: {
       role: "EMPLOYEE",
+      active: true,
       ...(userId ? { id: userId } : {}),
     },
     select: {
       id: true,
       name: true,
       email: true,
-      department: true,
+      monthlySalary: true,
     },
   });
 
   const entries = await prisma.timeEntry.findMany({
     where: whereClause,
     orderBy: { timestamp: "asc" },
-    include: { user: { select: { name: true, email: true, department: true } } },
+    include: { user: { select: { name: true, email: true } } },
   });
 
   const report = employees.map((employee) => {

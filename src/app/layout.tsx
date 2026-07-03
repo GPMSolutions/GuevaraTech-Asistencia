@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TimeTracker - Employee Time Tracking",
-  description: "Track employee work hours, lunch breaks, and generate reports",
+  title: "GuevaraTech - Control de Asistencia",
+  description: "Sistema de control de asistencia y planilla para empleados",
 };
 
 export default function RootLayout({
@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-gray-50">
