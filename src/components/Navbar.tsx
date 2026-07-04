@@ -37,6 +37,9 @@ export default function Navbar() {
                   <Link href="/admin" className={linkClass("/admin")}>
                     Empleados
                   </Link>
+                  <Link href="/admin/asistencia" className={linkClass("/admin/asistencia")}>
+                    Asistencia
+                  </Link>
                   <Link href="/admin/reportes" className={linkClass("/admin/reportes")}>
                     Reportes
                   </Link>
@@ -77,6 +80,9 @@ export default function Navbar() {
             <>
               <Link href="/admin" className={linkClass("/admin")}>
                 Empleados
+              </Link>
+              <Link href="/admin/asistencia" className={linkClass("/admin/asistencia")}>
+                Asistencia
               </Link>
               <Link href="/admin/reportes" className={linkClass("/admin/reportes")}>
                 Reportes
