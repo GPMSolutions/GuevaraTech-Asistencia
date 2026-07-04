@@ -24,7 +24,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
-            <span className="text-white font-bold text-lg">GuevaraTech</span>
+            <img src="/logo.jpg" alt="Guevara Technology" className="h-10 w-auto" />
+            <span className="text-white font-bold text-lg hidden lg:inline">GuevaraTech</span>
             <div className="hidden sm:flex ml-6 gap-1">
               {!isAdmin && (
                 <Link href="/dashboard" className={linkClass("/dashboard")}>
@@ -41,6 +42,9 @@ export default function Navbar() {
                   </Link>
                   <Link href="/admin/planilla" className={linkClass("/admin/planilla")}>
                     Planilla
+                  </Link>
+                  <Link href="/admin/cuenta" className={linkClass("/admin/cuenta")}>
+                    Mi Cuenta
                   </Link>
                 </>
               )}
@@ -79,6 +83,9 @@ export default function Navbar() {
               </Link>
               <Link href="/admin/planilla" className={linkClass("/admin/planilla")}>
                 Planilla
+              </Link>
+              <Link href="/admin/cuenta" className={linkClass("/admin/cuenta")}>
+                Mi Cuenta
               </Link>
             </>
           )}

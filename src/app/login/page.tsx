@@ -36,8 +36,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">GuevaraTech</h1>
-          <p className="text-gray-500 mt-2">Control de Asistencia</p>
+          <img
+            src="/logo.jpg"
+            alt="Guevara Technology"
+            className="mx-auto h-20 w-auto mb-4"
+          />
+          <h1 className="text-3xl font-bold text-gray-900">Control de Asistencia</h1>
         </div>
         <form
           onSubmit={handleSubmit}
