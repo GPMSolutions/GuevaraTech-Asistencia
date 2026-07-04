@@ -170,19 +170,16 @@ function calculateWeeks(
   }
 
   for (const [weekKey, { days, sundayInMonth }] of weekMap) {
-    // Count workdays (Mon-Sat) where employee was present
-    const workDays = days.filter(
+    // Count workdays (Mon-Sat) where employee was actually present.
+    // A worked holiday is present, so it's already included here.
+    // Holidays that were NOT worked do not count toward Sunday pay.
+    const daysWorked = days.filter(
       (d) => !d.isSunday && d.present
-    );
-    // Holidays (not worked) also count as "days worked" for Sunday calculation
-    const holidayDays = days.filter(
-      (d) => !d.isSunday && !d.present && d.isHoliday
-    );
-    const daysWorked = workDays.length + holidayDays.length;
+    ).length;
 
     // Sunday pay is incremental: (daysWorked / 6) * dailyRate
     // 1 day = 1/6, 2 days = 2/6, ..., 6 days = full daily rate
-    // 0 days worked (and no holidays) = no Sunday pay
+    // 0 actual days worked = no Sunday pay
     let sundayPay = 0;
     if (sundayInMonth && daysWorked > 0) {
       sundayPay = (daysWorked / 6) * dailyRate;
