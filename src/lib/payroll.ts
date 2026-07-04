@@ -101,32 +101,23 @@ export function calculatePayroll(
   let totalHolidayBonus = 0;
   let totalWorkedMinutes = 0;
 
-  // First pass: count actual days worked (not holidays)
   for (const day of attendance) {
     if (day.isSunday) continue;
+
     if (day.present) {
       totalDaysWorked++;
       totalWorkedMinutes += day.workedMinutes;
-    }
-  }
 
-  // Only calculate pay if employee has actually worked at least one day
-  if (totalDaysWorked > 0) {
-    for (const day of attendance) {
-      if (day.isSunday) continue;
-
-      if (day.present) {
-        if (day.isHoliday) {
-          // Holiday worked: 3x daily rate (1 regular + 2 extra)
-          totalRegularPay += dailyRate;
-          totalHolidayBonus += dailyRate * 2;
-        } else {
-          totalRegularPay += dailyRate;
-        }
-      } else if (day.isHoliday && day.date.getDay() !== 0) {
-        // Holiday not worked but still paid (only if employee has attendance)
+      if (day.isHoliday) {
+        // Holiday worked: 3x daily rate (1 regular + 2 extra)
+        totalRegularPay += dailyRate;
+        totalHolidayBonus += dailyRate * 2;
+      } else {
         totalRegularPay += dailyRate;
       }
+    } else if (day.isHoliday && day.date.getDay() !== 0) {
+      // Holidays are ALWAYS paid even if employee didn't work that week
+      totalRegularPay += dailyRate;
     }
   }
 
@@ -183,17 +174,15 @@ function calculateWeeks(
     const workDays = days.filter(
       (d) => !d.isSunday && d.present
     );
-    // Only count holidays toward Sunday pay if employee actually worked that week
-    let daysWorked = workDays.length;
-    if (workDays.length > 0) {
-      const holidayDays = days.filter(
-        (d) => !d.isSunday && !d.present && d.isHoliday
-      );
-      daysWorked += holidayDays.length;
-    }
+    // Holidays (not worked) also count as "days worked" for Sunday calculation
+    const holidayDays = days.filter(
+      (d) => !d.isSunday && !d.present && d.isHoliday
+    );
+    const daysWorked = workDays.length + holidayDays.length;
 
-    // Sunday pay proportional: (daysWorked / 6) * dailyRate
-    // Only if this week has a Sunday in the current month and employee worked
+    // Sunday pay is incremental: (daysWorked / 6) * dailyRate
+    // 1 day = 1/6, 2 days = 2/6, ..., 6 days = full daily rate
+    // 0 days worked (and no holidays) = no Sunday pay
     let sundayPay = 0;
     if (sundayInMonth && daysWorked > 0) {
       sundayPay = (daysWorked / 6) * dailyRate;
