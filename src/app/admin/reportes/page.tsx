@@ -4,12 +4,13 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface Employee {
   id: string;
   name: string;
   email: string;
-  department: string;
+  monthlySalary: number;
 }
 
 interface DaySummary {
@@ -38,7 +39,7 @@ function formatMinutes(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
-export default function ManagerPage() {
+export default function ReportesPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [period, setPeriod] = useState<"week" | "month">("week");
@@ -56,7 +57,7 @@ export default function ManagerPage() {
       return;
     }
     if (status === "authenticated") {
-      if (session.user.role !== "MANAGER") {
+      if (session.user.role !== "ADMIN") {
         router.push("/dashboard");
         return;
       }
@@ -70,7 +71,7 @@ export default function ManagerPage() {
   }, [status, session, router]);
 
   useEffect(() => {
-    if (status !== "authenticated" || !session || session.user.role !== "MANAGER")
+    if (status !== "authenticated" || !session || session.user.role !== "ADMIN")
       return;
 
     const fetchKey = `${period}-${selectedEmployee}`;
@@ -92,26 +93,26 @@ export default function ManagerPage() {
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-gray-500 text-lg">Loading...</div>
+        <div className="text-gray-500 text-lg">Cargando...</div>
       </div>
     );
   }
 
-  if (!session || session.user.role !== "MANAGER") return null;
+  if (!session || session.user.role !== "ADMIN") return null;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
         <h1 className="text-2xl font-bold text-gray-900">
-          Employee Hours Report
+          Reportes de Asistencia
         </h1>
         <div className="flex gap-3">
           <select
             value={selectedEmployee}
             onChange={(e) => setSelectedEmployee(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            <option value="">All Employees</option>
+            <option value="">Todos los Empleados</option>
             {employees.map((emp) => (
               <option key={emp.id} value={emp.id}>
                 {emp.name}
@@ -123,21 +124,21 @@ export default function ManagerPage() {
               onClick={() => setPeriod("week")}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 period === "week"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-emerald-600 text-white"
                   : "bg-white text-gray-700 hover:bg-gray-50"
               }`}
             >
-              Weekly
+              Semanal
             </button>
             <button
               onClick={() => setPeriod("month")}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 period === "month"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-emerald-600 text-white"
                   : "bg-white text-gray-700 hover:bg-gray-50"
               }`}
             >
-              Monthly
+              Mensual
             </button>
           </div>
         </div>
@@ -145,7 +146,7 @@ export default function ManagerPage() {
 
       {loading ? (
         <div className="flex items-center justify-center min-h-[40vh]">
-          <div className="text-gray-500 text-lg">Loading report...</div>
+          <div className="text-gray-500 text-lg">Cargando reporte...</div>
         </div>
       ) : (
         <>
@@ -153,15 +154,15 @@ export default function ManagerPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               <div className="bg-white rounded-lg shadow-md p-5 text-center">
                 <p className="text-sm text-gray-500 uppercase tracking-wide">
-                  Total Employees
+                  Total Empleados
                 </p>
-                <p className="text-3xl font-bold text-blue-600 mt-1">
+                <p className="text-3xl font-bold text-emerald-600 mt-1">
                   {reportData.report.length}
                 </p>
               </div>
               <div className="bg-white rounded-lg shadow-md p-5 text-center">
                 <p className="text-sm text-gray-500 uppercase tracking-wide">
-                  Avg Hours
+                  Promedio Horas
                 </p>
                 <p className="text-3xl font-bold text-green-600 mt-1">
                   {(
@@ -174,13 +175,13 @@ export default function ManagerPage() {
               </div>
               <div className="bg-white rounded-lg shadow-md p-5 text-center">
                 <p className="text-sm text-gray-500 uppercase tracking-wide">
-                  Period
+                  Período
                 </p>
                 <p className="text-lg font-semibold text-gray-800 mt-2">
-                  {period === "week" ? "This Week" : "This Month"}
+                  {period === "week" ? "Esta Semana" : "Este Mes"}
                 </p>
                 <p className="text-sm text-gray-400">
-                  From {format(new Date(reportData.startDate), "MMM d")}
+                  Desde {format(new Date(reportData.startDate), "d 'de' MMM", { locale: es })}
                 </p>
               </div>
             </div>
@@ -189,7 +190,7 @@ export default function ManagerPage() {
           {!reportData || reportData.report.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-8 text-center">
               <p className="text-gray-500">
-                No data available for this period
+                No hay datos para este período
               </p>
             </div>
           ) : (
@@ -210,7 +211,7 @@ export default function ManagerPage() {
                     className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                      <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
                         {empReport.employee.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="text-left">
@@ -219,20 +220,15 @@ export default function ManagerPage() {
                         </p>
                         <p className="text-sm text-gray-500">
                           {empReport.employee.email}
-                          {empReport.employee.department && (
-                            <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                              {empReport.employee.department}
-                            </span>
-                          )}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-blue-600">
+                      <p className="text-2xl font-bold text-emerald-600">
                         {empReport.totalWorkHours}h
                       </p>
                       <p className="text-xs text-gray-400">
-                        {empReport.dailySummaries.length} days worked
+                        {empReport.dailySummaries.length} días trabajados
                       </p>
                     </div>
                   </button>
@@ -240,22 +236,22 @@ export default function ManagerPage() {
                   {expandedEmployee === empReport.employee.id && (
                     <div className="border-t border-gray-100 px-6 py-4">
                       {empReport.dailySummaries.length === 0 ? (
-                        <p className="text-gray-500 text-sm">No entries</p>
+                        <p className="text-gray-500 text-sm">Sin registros</p>
                       ) : (
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-gray-500 border-b">
                               <th className="text-left py-2 font-medium">
-                                Date
+                                Fecha
                               </th>
                               <th className="text-right py-2 font-medium">
-                                Work Time
+                                Trabajo
                               </th>
                               <th className="text-right py-2 font-medium">
-                                Lunch
+                                Almuerzo
                               </th>
                               <th className="text-right py-2 font-medium">
-                                Entries
+                                Registros
                               </th>
                             </tr>
                           </thead>
@@ -268,7 +264,8 @@ export default function ManagerPage() {
                                 <td className="py-2 text-gray-800">
                                   {format(
                                     new Date(day.date + "T12:00:00"),
-                                    "EEE, MMM d"
+                                    "EEE, d MMM",
+                                    { locale: es }
                                   )}
                                 </td>
                                 <td className="py-2 text-right text-gray-800">
