@@ -22,24 +22,19 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const period = searchParams.get("period") || "week";
+  const period = searchParams.get("period") === "month" ? "month" : "week";
   const userId = searchParams.get("userId");
 
   const now = new Date();
-  let startDate: Date;
+  const year = parseInt(searchParams.get("year") || "") || now.getFullYear();
+  const month =
+    parseInt(searchParams.get("month") || "") || now.getMonth() + 1; // 1-12
 
-  if (period === "month") {
-    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else {
-    const dayOfWeek = now.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    startDate = new Date(now);
-    startDate.setDate(now.getDate() + mondayOffset);
-    startDate.setHours(0, 0, 0, 0);
-  }
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 1);
 
-  const whereClause: { timestamp: { gte: Date }; userId?: string } = {
-    timestamp: { gte: startDate },
+  const whereClause: { timestamp: { gte: Date; lt: Date }; userId?: string } = {
+    timestamp: { gte: monthStart, lt: monthEnd },
   };
   if (userId) whereClause.userId = userId;
 
@@ -52,7 +47,6 @@ export async function GET(req: NextRequest) {
     select: {
       id: true,
       name: true,
-      email: true,
       monthlySalary: true,
     },
   });
@@ -60,26 +54,68 @@ export async function GET(req: NextRequest) {
   const entries = await prisma.timeEntry.findMany({
     where: whereClause,
     orderBy: { timestamp: "asc" },
-    include: { user: { select: { name: true, email: true } } },
   });
 
-  const report = employees.map((employee) => {
-    const employeeEntries = entries.filter((e) => e.userId === employee.id);
-    const dailySummaries = computeDailySummaries(employeeEntries);
-    const totalWorkMinutes = dailySummaries.reduce(
-      (sum, d) => sum + d.workMinutes,
-      0
-    );
+  function buildReport(rangeStart: Date, rangeEnd: Date) {
+    return employees.map((employee) => {
+      const employeeEntries = entries.filter(
+        (e) =>
+          e.userId === employee.id &&
+          e.timestamp >= rangeStart &&
+          e.timestamp < rangeEnd
+      );
+      const dailySummaries = computeDailySummaries(employeeEntries);
+      const totalWorkMinutes = dailySummaries.reduce(
+        (sum, d) => sum + d.workMinutes,
+        0
+      );
+      return {
+        employee,
+        dailySummaries,
+        totalWorkMinutes,
+        totalWorkHours: Math.round((totalWorkMinutes / 60) * 100) / 100,
+      };
+    });
+  }
 
-    return {
-      employee,
-      dailySummaries,
-      totalWorkMinutes,
-      totalWorkHours: Math.round((totalWorkMinutes / 60) * 100) / 100,
-    };
-  });
+  const groups: {
+    label: string;
+    startDate: string;
+    endDate: string;
+    report: ReturnType<typeof buildReport>;
+  }[] = [];
 
-  return NextResponse.json({ period, startDate: startDate.toISOString(), report });
+  if (period === "month") {
+    groups.push({
+      label: "Mes completo",
+      startDate: monthStart.toISOString(),
+      endDate: monthEnd.toISOString(),
+      report: buildReport(monthStart, monthEnd),
+    });
+  } else {
+    // Split the month into Monday-anchored weeks, clamped to the month bounds.
+    let cursor = new Date(monthStart);
+    let weekNum = 1;
+    while (cursor < monthEnd) {
+      const dayOfWeek = cursor.getDay();
+      const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+      const weekEnd = new Date(cursor);
+      weekEnd.setDate(cursor.getDate() + daysUntilSunday + 1); // exclusive end (next Monday)
+      const clampedEnd = weekEnd < monthEnd ? weekEnd : monthEnd;
+
+      groups.push({
+        label: `Semana ${weekNum}`,
+        startDate: cursor.toISOString(),
+        endDate: clampedEnd.toISOString(),
+        report: buildReport(cursor, clampedEnd),
+      });
+
+      cursor = clampedEnd;
+      weekNum++;
+    }
+  }
+
+  return NextResponse.json({ period, year, month, groups });
 }
 
 function computeDailySummaries(

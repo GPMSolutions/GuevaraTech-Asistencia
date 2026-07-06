@@ -19,9 +19,9 @@ export default function AdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showResetPassword, setShowResetPassword] = useState<string | null>(null);
-  const [newEmployee, setNewEmployee] = useState({ name: "", email: "", password: "" });
-  const [newPassword, setNewPassword] = useState("");
+  const [editSalary, setEditSalary] = useState<string | null>(null);
+  const [salaryValue, setSalaryValue] = useState("");
+  const [newEmployee, setNewEmployee] = useState({ name: "", monthlySalary: "1130" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const hasFetched = useRef(false);
@@ -57,15 +57,19 @@ export default function AdminPage() {
     setError("");
     setSuccess("");
 
+    const salary = parseFloat(newEmployee.monthlySalary);
     const res = await fetch("/api/employees", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newEmployee),
+      body: JSON.stringify({
+        name: newEmployee.name,
+        monthlySalary: isNaN(salary) ? undefined : salary,
+      }),
     });
 
     if (res.ok) {
       setSuccess("Empleado agregado exitosamente");
-      setNewEmployee({ name: "", email: "", password: "" });
+      setNewEmployee({ name: "", monthlySalary: "1130" });
       setShowAddForm(false);
       await fetchEmployees();
     } else {
@@ -91,9 +95,10 @@ export default function AdminPage() {
     }
   }
 
-  async function handleResetPassword(id: string) {
-    if (!newPassword || newPassword.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
+  async function handleUpdateSalary(id: string) {
+    const salary = parseFloat(salaryValue);
+    if (isNaN(salary) || salary < 0) {
+      setError("Ingrese un salario válido");
       return;
     }
     setError("");
@@ -102,16 +107,17 @@ export default function AdminPage() {
     const res = await fetch(`/api/employees/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reset_password", password: newPassword }),
+      body: JSON.stringify({ monthlySalary: salary }),
     });
 
     if (res.ok) {
-      setSuccess("Contraseña actualizada");
-      setShowResetPassword(null);
-      setNewPassword("");
+      setSuccess("Salario actualizado");
+      setEditSalary(null);
+      setSalaryValue("");
+      await fetchEmployees();
     } else {
       const data = await res.json();
-      setError(data.error || "Error al actualizar contraseña");
+      setError(data.error || "Error al actualizar salario");
     }
   }
 
@@ -179,27 +185,16 @@ export default function AdminPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
+                Salario Mensual (S/)
               </label>
               <input
-                type="email"
-                value={newEmployee.email}
-                onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                type="number"
+                step="0.01"
+                min="0"
+                value={newEmployee.monthlySalary}
+                onChange={(e) => setNewEmployee({ ...newEmployee, monthlySalary: e.target.value })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                value={newEmployee.password}
-                onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                required
-                minLength={6}
               />
             </div>
             <button
@@ -220,7 +215,7 @@ export default function AdminPage() {
                 Nombre
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Email
+                Salario Mensual
               </th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                 Estado
@@ -244,7 +239,7 @@ export default function AdminPage() {
                     {emp.name}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
-                    {emp.email}
+                    S/ {emp.monthlySalary.toFixed(2)}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <button
@@ -261,12 +256,12 @@ export default function AdminPage() {
                   <td className="px-6 py-4 text-right space-x-2">
                     <button
                       onClick={() => {
-                        setShowResetPassword(showResetPassword === emp.id ? null : emp.id);
-                        setNewPassword("");
+                        setEditSalary(editSalary === emp.id ? null : emp.id);
+                        setSalaryValue(emp.monthlySalary.toString());
                       }}
                       className="text-blue-600 hover:text-blue-800 text-xs font-medium"
                     >
-                      Cambiar Clave
+                      Editar Salario
                     </button>
                     <button
                       onClick={() => handleDeleteEmployee(emp.id, emp.name)}
@@ -274,17 +269,19 @@ export default function AdminPage() {
                     >
                       Eliminar
                     </button>
-                    {showResetPassword === emp.id && (
-                      <div className="mt-2 flex gap-2">
+                    {editSalary === emp.id && (
+                      <div className="mt-2 flex gap-2 justify-end">
                         <input
-                          type="password"
-                          placeholder="Nueva contraseña"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="border border-gray-300 rounded px-2 py-1 text-xs text-gray-900"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Salario mensual"
+                          value={salaryValue}
+                          onChange={(e) => setSalaryValue(e.target.value)}
+                          className="border border-gray-300 rounded px-2 py-1 text-xs text-gray-900 w-32"
                         />
                         <button
-                          onClick={() => handleResetPassword(emp.id)}
+                          onClick={() => handleUpdateSalary(emp.id)}
                           className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
                         >
                           Guardar
