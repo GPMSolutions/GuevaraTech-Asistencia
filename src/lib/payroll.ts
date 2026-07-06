@@ -4,6 +4,8 @@
  * Rules:
  * - Monthly salary: S/ 1,130.00 (configurable per employee)
  * - Daily rate = monthlySalary / daysInMonth
+ * - Regular daily pay is proportional to hours worked, capped at 8h/day
+ *   (a half day pays half the daily rate; hours beyond 8 do not add to regular pay)
  * - Work schedule: Mon-Sat, 8 hours/day, 48 hours/week
  * - Sunday pay: proportional to days worked in the week
  *   (e.g., 6/6 days = full Sunday pay, 5/6 = 5/6 of daily rate)
@@ -12,6 +14,9 @@
  */
 
 import { isPeruHoliday, getDaysInMonth } from "./holidays";
+
+/** Minutes in a standard workday (8 hours) used to prorate daily pay. */
+const STANDARD_DAY_MINUTES = 8 * 60;
 
 export interface DailyAttendance {
   date: Date;
@@ -108,15 +113,20 @@ export function calculatePayroll(
       totalDaysWorked++;
       totalWorkedMinutes += day.workedMinutes;
 
+      // Regular pay is proportional to hours actually worked, capped at a
+      // full standard workday (8h). A half day pays half a daily rate; hours
+      // beyond 8 do not increase regular pay (they accrue as overtime/banked).
+      const dayFraction = Math.min(day.workedMinutes / STANDARD_DAY_MINUTES, 1);
+
       if (day.isHoliday) {
-        // Holiday worked: 3x daily rate (1 regular + 2 extra)
-        totalRegularPay += dailyRate;
-        totalHolidayBonus += dailyRate * 2;
+        // Holiday worked: proportional regular pay + 2x bonus on hours worked.
+        totalRegularPay += dailyRate * dayFraction;
+        totalHolidayBonus += dailyRate * 2 * dayFraction;
       } else {
-        totalRegularPay += dailyRate;
+        totalRegularPay += dailyRate * dayFraction;
       }
     } else if (day.isHoliday && day.date.getDay() !== 0) {
-      // Holidays are ALWAYS paid even if employee didn't work that week
+      // Holidays are ALWAYS paid in full even if employee didn't work that week
       totalRegularPay += dailyRate;
     }
   }
