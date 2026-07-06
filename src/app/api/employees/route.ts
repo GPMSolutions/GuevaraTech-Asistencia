@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
+import { randomUUID } from "crypto";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -41,36 +42,34 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, email, password } = body as {
+  const { name, monthlySalary } = body as {
     name: string;
-    email: string;
-    password: string;
+    monthlySalary?: number;
   };
 
-  if (!name || !email || !password) {
+  if (!name || !name.trim()) {
     return NextResponse.json(
-      { error: "Nombre, email y contraseña son requeridos" },
+      { error: "El nombre es requerido" },
       { status: 400 }
     );
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return NextResponse.json(
-      { error: "Ya existe un usuario con ese email" },
-      { status: 409 }
-    );
-  }
-
-  const hashedPassword = await hash(password, 12);
+  // Employees no longer log in individually (they use the shared kiosk), but the
+  // User model still requires a unique email + password, so we generate internal
+  // placeholders that are never used for authentication.
+  const internalEmail = `empleado-${randomUUID()}@guevaratech.local`;
+  const hashedPassword = await hash(randomUUID(), 12);
 
   const employee = await prisma.user.create({
     data: {
-      name,
-      email,
+      name: name.trim(),
+      email: internalEmail,
       password: hashedPassword,
       role: "EMPLOYEE",
-      monthlySalary: 1130.0,
+      monthlySalary:
+        typeof monthlySalary === "number" && monthlySalary >= 0
+          ? monthlySalary
+          : 1130.0,
     },
     select: {
       id: true,
