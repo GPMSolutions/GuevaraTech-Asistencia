@@ -46,12 +46,21 @@ export async function GET(req: NextRequest) {
     orderBy: { timestamp: "asc" },
   });
 
+  const deductions = await prisma.deduction.findMany({
+    where: {
+      year,
+      month,
+      ...(employeeId ? { userId: employeeId } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   // Group entries by user and date
   const results = employees.map((emp) => {
     const empEntries = timeEntries.filter((e) => e.userId === emp.id);
     const attendanceMap = buildAttendanceMap(empEntries);
 
-    return calculatePayroll(
+    const base = calculatePayroll(
       emp.id,
       emp.name,
       emp.monthlySalary,
@@ -59,6 +68,17 @@ export async function GET(req: NextRequest) {
       month,
       attendanceMap
     );
+
+    const empDeductions = deductions.filter((d) => d.userId === emp.id);
+    const totalDeductions = empDeductions.reduce((sum, d) => sum + d.amount, 0);
+    const netPay = base.totalPay - totalDeductions;
+
+    return {
+      ...base,
+      deductions: empDeductions,
+      totalDeductions: Math.round(totalDeductions * 100) / 100,
+      netPay: Math.round(netPay * 100) / 100,
+    };
   });
 
   return NextResponse.json({ year, month, payroll: results });

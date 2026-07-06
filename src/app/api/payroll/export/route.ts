@@ -34,6 +34,10 @@ export async function GET(req: NextRequest) {
     orderBy: { timestamp: "asc" },
   });
 
+  const deductions = await prisma.deduction.findMany({
+    where: { year, month },
+  });
+
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -41,7 +45,7 @@ export async function GET(req: NextRequest) {
 
   // Build CSV
   const lines: string[] = [];
-  lines.push("Empleado,Email,Salario Mensual,Dias Trabajados,Pago Regular,Pago Dominical,Bono Feriado,Total a Pagar,Horas Trabajadas");
+  lines.push("Empleado,Email,Salario Mensual,Dias Trabajados,Pago Regular,Pago Dominical,Bono Feriado,Total Bruto,Descuentos,Total a Pagar,Horas Trabajadas");
 
   for (const emp of employees) {
     const empEntries = timeEntries.filter((e) => e.userId === emp.id);
@@ -57,6 +61,10 @@ export async function GET(req: NextRequest) {
     );
 
     const hoursWorked = Math.round((result.totalWorkedMinutes / 60) * 100) / 100;
+    const totalDeductions = deductions
+      .filter((d) => d.userId === emp.id)
+      .reduce((sum, d) => sum + d.amount, 0);
+    const netPay = result.totalPay - totalDeductions;
 
     lines.push(
       [
@@ -68,6 +76,8 @@ export async function GET(req: NextRequest) {
         result.totalSundayPay.toFixed(2),
         result.totalHolidayBonus.toFixed(2),
         result.totalPay.toFixed(2),
+        totalDeductions.toFixed(2),
+        netPay.toFixed(2),
         hoursWorked.toFixed(2),
       ].join(",")
     );

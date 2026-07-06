@@ -11,6 +11,7 @@ export default function Navbar() {
   if (!session) return null;
 
   const isAdmin = session.user.role === "ADMIN";
+  const isKiosk = session.user.role === "KIOSK";
 
   const linkClass = (path: string) =>
     `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -27,7 +28,12 @@ export default function Navbar() {
             <img src="/logo.jpg" alt="Guevara Technology" className="h-10 w-auto" />
             <span className="text-white font-bold text-lg hidden lg:inline">GuevaraTech</span>
             <div className="hidden sm:flex ml-6 gap-1">
-              {!isAdmin && (
+              {isKiosk && (
+                <Link href="/kiosk" className={linkClass("/kiosk")}>
+                  Marcar Asistencia
+                </Link>
+              )}
+              {!isAdmin && !isKiosk && (
                 <Link href="/dashboard" className={linkClass("/dashboard")}>
                   Mi Asistencia
                 </Link>
