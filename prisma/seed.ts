@@ -8,6 +8,7 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   const adminPassword = await hash("admin123", 12);
   const employeePassword = await hash("empleado123", 12);
+  const kioskPassword = await hash("trabajadores123", 12);
 
   // Create admin
   const admin = await prisma.user.upsert({
@@ -18,6 +19,19 @@ async function main() {
       name: "Administrador",
       password: adminPassword,
       role: "ADMIN",
+      monthlySalary: 0,
+    },
+  });
+
+  // Shared kiosk account for all workers to clock in/out
+  const kiosk = await prisma.user.upsert({
+    where: { email: "trabajadores@guevaratech.com" },
+    update: {},
+    create: {
+      email: "trabajadores@guevaratech.com",
+      name: "Trabajadores",
+      password: kioskPassword,
+      role: "KIOSK",
       monthlySalary: 0,
     },
   });
@@ -99,6 +113,7 @@ async function main() {
 
   console.log("Seed completado:", {
     admin: admin.email,
+    kiosk: kiosk.email,
     empleados: employees.map((e) => e.email),
   });
 }

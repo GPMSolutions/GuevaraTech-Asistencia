@@ -94,6 +94,10 @@ export default function DashboardPage() {
         router.push("/admin");
         return;
       }
+      if (session.user.role === "KIOSK") {
+        router.push("/kiosk");
+        return;
+      }
       if (!hasFetched.current) {
         hasFetched.current = true;
         fetchTodayEntries().then((data) => {
