@@ -4,9 +4,14 @@
  * Rules:
  * - Monthly salary: S/ 1,130.00 (configurable per employee)
  * - Daily rate = monthlySalary / daysInMonth
- * - Regular daily pay is proportional to hours worked, capped at 8h/day
- *   (a half day pays half the daily rate; hours beyond 8 do not add to regular pay)
  * - Work schedule: Mon-Sat, 8 hours/day, 48 hours/week
+ * - Regular pay uses a monthly hours pool: all worked minutes on regular
+ *   (non-holiday) Mon-Sat days are summed WITHOUT a per-day cap, so extra hours
+ *   on one day cover short hours on another day anywhere in the month. Pay is the
+ *   pool capped at the full monthly schedule (8h × those days); it never exceeds
+ *   a full schedule.
+ * - Hours bank ("horas a favor"): worked minutes beyond the full monthly
+ *   schedule are NOT paid — they are saved as a balance the admin can see.
  * - Sunday pay: proportional to hours worked in the week (fractional days,
  *   each capped at 8h). 6 full days = full Sunday pay; a half day counts as 0.5
  * - Holiday pay: if employee works on a holiday, they earn 3x daily rate
@@ -52,6 +57,15 @@ export interface PayrollResult {
   totalHolidayBonus: number;
   totalPay: number;
   totalWorkedMinutes: number;
+  /** Full regular schedule for the month in minutes (8h × non-holiday Mon-Sat days). */
+  targetRegularMinutes: number;
+  /** Regular minutes actually paid this month (min of worked pool and target). */
+  paidRegularMinutes: number;
+  /**
+   * Leftover worked minutes after the whole month's 48h/week schedule is filled.
+   * These are NOT paid — they are saved to the hours bank ("horas a favor").
+   */
+  bankMinutes: number;
 }
 
 /**
@@ -102,34 +116,54 @@ export function calculatePayroll(
 
   // Calculate totals
   let totalDaysWorked = 0;
-  let totalRegularPay = 0;
   let totalHolidayBonus = 0;
   let totalWorkedMinutes = 0;
+
+  // Hours-bank pooling: total the worked minutes of all regular (non-holiday,
+  // Mon-Sat) days WITHOUT a per-day cap, so extra hours on one day fill in
+  // short hours on another day anywhere in the month. Regular pay is then
+  // based on the pool, capped at the full monthly schedule (8h × those days).
+  // Holidays are handled separately (always paid; worked holidays earn 3x).
+  let pooledWorkedMinutes = 0;
+  let scheduledRegularDays = 0;
+  let holidayRegularPay = 0;
 
   for (const day of attendance) {
     if (day.isSunday) continue;
 
+    if (day.isHoliday) {
+      if (day.present) {
+        totalDaysWorked++;
+        totalWorkedMinutes += day.workedMinutes;
+        // Worked holiday: proportional regular pay + 2x bonus on hours worked.
+        const holidayFraction = Math.min(day.workedMinutes / STANDARD_DAY_MINUTES, 1);
+        holidayRegularPay += dailyRate * holidayFraction;
+        totalHolidayBonus += dailyRate * 2 * holidayFraction;
+      } else {
+        // Holidays are ALWAYS paid in full even if the employee didn't work.
+        holidayRegularPay += dailyRate;
+      }
+      continue;
+    }
+
+    // Regular (non-holiday) Mon-Sat day: counts toward the monthly schedule.
+    scheduledRegularDays++;
     if (day.present) {
       totalDaysWorked++;
       totalWorkedMinutes += day.workedMinutes;
-
-      // Regular pay is proportional to hours actually worked, capped at a
-      // full standard workday (8h). A half day pays half a daily rate; hours
-      // beyond 8 do not increase regular pay (they accrue as overtime/banked).
-      const dayFraction = Math.min(day.workedMinutes / STANDARD_DAY_MINUTES, 1);
-
-      if (day.isHoliday) {
-        // Holiday worked: proportional regular pay + 2x bonus on hours worked.
-        totalRegularPay += dailyRate * dayFraction;
-        totalHolidayBonus += dailyRate * 2 * dayFraction;
-      } else {
-        totalRegularPay += dailyRate * dayFraction;
-      }
-    } else if (day.isHoliday && day.date.getDay() !== 0) {
-      // Holidays are ALWAYS paid in full even if employee didn't work that week
-      totalRegularPay += dailyRate;
+      pooledWorkedMinutes += day.workedMinutes;
     }
   }
+
+  const targetRegularMinutes = scheduledRegularDays * STANDARD_DAY_MINUTES;
+  const paidRegularMinutes = Math.min(pooledWorkedMinutes, targetRegularMinutes);
+  const bankMinutes = Math.max(
+    0,
+    Math.round(pooledWorkedMinutes - targetRegularMinutes)
+  );
+
+  const totalRegularPay =
+    (paidRegularMinutes / STANDARD_DAY_MINUTES) * dailyRate + holidayRegularPay;
 
   const totalSundayPay = weeks.reduce((sum, w) => sum + w.sundayPay, 0);
   const totalPay = totalRegularPay + totalSundayPay + totalHolidayBonus;
@@ -150,6 +184,9 @@ export function calculatePayroll(
     totalHolidayBonus,
     totalPay,
     totalWorkedMinutes,
+    targetRegularMinutes,
+    paidRegularMinutes,
+    bankMinutes,
   };
 }
 

@@ -26,11 +26,11 @@ export async function GET(req: NextRequest) {
     select: { id: true, name: true, email: true, monthlySalary: true },
   });
 
-  const startDate = new Date(year, month - 1, 1);
+  const yearStart = new Date(year, 0, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
   const timeEntries = await prisma.timeEntry.findMany({
-    where: { timestamp: { gte: startDate, lte: endDate } },
+    where: { timestamp: { gte: yearStart, lte: endDate } },
     orderBy: { timestamp: "asc" },
   });
 
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 
   // Build CSV
   const lines: string[] = [];
-  lines.push("Empleado,Email,Salario Mensual,Dias Trabajados,Pago Regular,Pago Dominical,Bono Feriado,Total Bruto,Descuentos,Total a Pagar,Horas Trabajadas");
+  lines.push("Empleado,Email,Salario Mensual,Dias Trabajados,Pago Regular,Pago Dominical,Bono Feriado,Total Bruto,Descuentos,Total a Pagar,Horas Trabajadas,Horas a Favor (Banco)");
 
   for (const emp of employees) {
     const empEntries = timeEntries.filter((e) => e.userId === emp.id);
@@ -60,7 +60,20 @@ export async function GET(req: NextRequest) {
       attendanceMap
     );
 
+    let accumulatedBankMinutes = 0;
+    for (let m = 1; m <= month; m++) {
+      accumulatedBankMinutes += calculatePayroll(
+        emp.id,
+        emp.name,
+        emp.monthlySalary,
+        year,
+        m,
+        attendanceMap
+      ).bankMinutes;
+    }
+
     const hoursWorked = Math.round((result.totalWorkedMinutes / 60) * 100) / 100;
+    const bankHours = Math.round((accumulatedBankMinutes / 60) * 100) / 100;
     const totalDeductions = deductions
       .filter((d) => d.userId === emp.id)
       .reduce((sum, d) => sum + d.amount, 0);
@@ -79,6 +92,7 @@ export async function GET(req: NextRequest) {
         totalDeductions.toFixed(2),
         netPay.toFixed(2),
         hoursWorked.toFixed(2),
+        bankHours.toFixed(2),
       ].join(",")
     );
   }

@@ -34,13 +34,14 @@ export async function GET(req: NextRequest) {
     select: { id: true, name: true, monthlySalary: true },
   });
 
-  // Get time entries for the month
-  const startDate = new Date(year, month - 1, 1);
+  // Get time entries from the start of the year through the selected month.
+  // Entries before the selected month are used to accumulate the hours bank.
+  const yearStart = new Date(year, 0, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
   const timeEntries = await prisma.timeEntry.findMany({
     where: {
-      timestamp: { gte: startDate, lte: endDate },
+      timestamp: { gte: yearStart, lte: endDate },
       ...(employeeId ? { userId: employeeId } : {}),
     },
     orderBy: { timestamp: "asc" },
@@ -69,12 +70,29 @@ export async function GET(req: NextRequest) {
       attendanceMap
     );
 
+    // Accumulate the hours bank across every month of the year up to and
+    // including the selected month (calculatePayroll only reads the days of
+    // the month it is asked about, so the same map can be reused per month).
+    let accumulatedBankMinutes = 0;
+    for (let m = 1; m <= month; m++) {
+      const monthResult = calculatePayroll(
+        emp.id,
+        emp.name,
+        emp.monthlySalary,
+        year,
+        m,
+        attendanceMap
+      );
+      accumulatedBankMinutes += monthResult.bankMinutes;
+    }
+
     const empDeductions = deductions.filter((d) => d.userId === emp.id);
     const totalDeductions = empDeductions.reduce((sum, d) => sum + d.amount, 0);
     const netPay = base.totalPay - totalDeductions;
 
     return {
       ...base,
+      accumulatedBankMinutes,
       deductions: empDeductions,
       totalDeductions: Math.round(totalDeductions * 100) / 100,
       netPay: Math.round(netPay * 100) / 100,

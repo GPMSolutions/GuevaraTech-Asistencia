@@ -19,9 +19,21 @@ export interface PayslipEmployee {
   totalHolidayBonus: number;
   totalPay: number;
   totalWorkedMinutes: number;
+  bankMinutes?: number;
+  accumulatedBankMinutes?: number;
   deductions: PayslipDeduction[];
   totalDeductions: number;
   netPay: number;
+}
+
+function formatHoursMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0 && m === 0) return "0h";
+  if (m === 0) return `${h}h`;
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m}m`;
 }
 
 const MONTH_NAMES = [
@@ -82,6 +94,16 @@ export function generatePayslipPdf(
     left,
     y + 32
   );
+  if (emp.accumulatedBankMinutes && emp.accumulatedBankMinutes > 0) {
+    doc.text(
+      `Horas a favor (banco): ${formatHoursMinutes(
+        emp.accumulatedBankMinutes
+      )} (no se paga)`,
+      left,
+      y + 48
+    );
+    y += 16;
+  }
   y += 60;
 
   // Earnings section
