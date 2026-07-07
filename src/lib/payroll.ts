@@ -5,13 +5,14 @@
  * - Monthly salary: S/ 1,130.00 (configurable per employee)
  * - Daily rate = monthlySalary / daysInMonth
  * - Work schedule: Mon-Sat, 8 hours/day, 48 hours/week
- * - Regular pay uses a monthly hours pool: all worked minutes on regular
- *   (non-holiday) Mon-Sat days are summed WITHOUT a per-day cap, so extra hours
- *   on one day cover short hours on another day anywhere in the month. Pay is the
- *   pool capped at the full monthly schedule (8h × those days); it never exceeds
- *   a full schedule.
- * - Hours bank ("horas a favor"): worked minutes beyond the full monthly
- *   schedule are NOT paid — they are saved as a balance the admin can see.
+ * - Regular pay uses a monthly hours pool over the days actually worked: their
+ *   worked minutes on regular (non-holiday) Mon-Sat days are summed WITHOUT a
+ *   per-day cap, so extra minutes on one day cover short minutes on another day
+ *   anywhere in the month. Pay is the pool capped at 8h per worked day; it never
+ *   exceeds a full 8h day of pay per worked day.
+ * - Hours bank ("horas a favor"): the net minutes worked beyond 8h across the
+ *   worked days (over minus under) are NOT paid — after topping up any short
+ *   days, the leftover is saved as a balance the admin can see.
  * - Sunday pay: proportional to hours worked in the week (fractional days,
  *   each capped at 8h). 6 full days = full Sunday pay; a half day counts as 0.5
  * - Holiday pay: if employee works on a holiday, they earn 3x daily rate
@@ -57,13 +58,13 @@ export interface PayrollResult {
   totalHolidayBonus: number;
   totalPay: number;
   totalWorkedMinutes: number;
-  /** Full regular schedule for the month in minutes (8h × non-holiday Mon-Sat days). */
+  /** Expected minutes for the month: 8h × number of regular days worked. */
   targetRegularMinutes: number;
   /** Regular minutes actually paid this month (min of worked pool and target). */
   paidRegularMinutes: number;
   /**
-   * Leftover worked minutes after the whole month's 48h/week schedule is filled.
-   * These are NOT paid — they are saved to the hours bank ("horas a favor").
+   * Net minutes worked beyond 8h across the worked days, after short days are
+   * topped up. These are NOT paid — they are saved to the hours bank.
    */
   bankMinutes: number;
 }
@@ -146,9 +147,12 @@ export function calculatePayroll(
       continue;
     }
 
-    // Regular (non-holiday) Mon-Sat day: counts toward the monthly schedule.
-    scheduledRegularDays++;
+    // Regular (non-holiday) Mon-Sat day: only days the employee actually
+    // worked count toward the pool and the expected schedule. A worked day is
+    // expected to be 8h, so the bank is the net over/under across worked days.
+    // Absences simply don't count (they neither pay nor touch the bank).
     if (day.present) {
+      scheduledRegularDays++;
       totalDaysWorked++;
       totalWorkedMinutes += day.workedMinutes;
       pooledWorkedMinutes += day.workedMinutes;
