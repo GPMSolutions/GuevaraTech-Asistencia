@@ -30,9 +30,21 @@ interface PayrollEmployee {
   totalHolidayBonus: number;
   totalPay: number;
   totalWorkedMinutes: number;
+  bankMinutes: number;
+  accumulatedBankMinutes: number;
   deductions: Deduction[];
   totalDeductions: number;
   netPay: number;
+}
+
+function formatHoursMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0 && m === 0) return "0h";
+  if (m === 0) return `${h}h`;
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m}m`;
 }
 
 interface PayrollData {
@@ -218,6 +230,9 @@ export default function PlanillaPage() {
                   Feriado
                 </th>
                 <th className="px-3 py-3 text-right font-medium text-gray-500 uppercase text-xs">
+                  Banco Horas
+                </th>
+                <th className="px-3 py-3 text-right font-medium text-gray-500 uppercase text-xs">
                   Descuentos
                 </th>
                 <th className="px-3 py-3 text-right font-medium text-gray-500 uppercase text-xs">
@@ -231,7 +246,7 @@ export default function PlanillaPage() {
             <tbody className="divide-y divide-gray-200">
               {(!payrollData || payrollData.payroll.length === 0) ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     No hay datos de planilla para este período
                   </td>
                 </tr>
@@ -252,6 +267,16 @@ export default function PlanillaPage() {
                     </td>
                     <td className="px-3 py-3 text-right text-gray-700">
                       S/ {emp.totalHolidayBonus.toFixed(2)}
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <span className="font-medium text-blue-700">
+                        {formatHoursMinutes(emp.accumulatedBankMinutes)}
+                      </span>
+                      {emp.bankMinutes > 0 && (
+                        <span className="block text-[11px] text-gray-400">
+                          +{formatHoursMinutes(emp.bankMinutes)} este mes
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-right text-red-600">
                       {emp.totalDeductions > 0
