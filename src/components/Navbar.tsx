@@ -52,6 +52,9 @@ export default function Navbar() {
                   <Link href="/admin/planilla" className={linkClass("/admin/planilla")}>
                     Planilla
                   </Link>
+                  <Link href="/admin/kiosco" className={linkClass("/admin/kiosco")}>
+                    Kiosco
+                  </Link>
                   <Link href="/admin/cuenta" className={linkClass("/admin/cuenta")}>
                     Mi Cuenta
                   </Link>
@@ -95,6 +98,9 @@ export default function Navbar() {
               </Link>
               <Link href="/admin/planilla" className={linkClass("/admin/planilla")}>
                 Planilla
+              </Link>
+              <Link href="/admin/kiosco" className={linkClass("/admin/kiosco")}>
+                Kiosco
               </Link>
               <Link href="/admin/cuenta" className={linkClass("/admin/cuenta")}>
                 Mi Cuenta

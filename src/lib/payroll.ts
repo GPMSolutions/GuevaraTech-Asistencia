@@ -4,14 +4,19 @@
  * Rules:
  * - Monthly salary: S/ 1,130.00 (configurable per employee)
  * - Daily rate = monthlySalary / daysInMonth
+ * - Regular daily pay is proportional to hours worked, capped at 8h/day
+ *   (a half day pays half the daily rate; hours beyond 8 do not add to regular pay)
  * - Work schedule: Mon-Sat, 8 hours/day, 48 hours/week
- * - Sunday pay: proportional to days worked in the week
- *   (e.g., 6/6 days = full Sunday pay, 5/6 = 5/6 of daily rate)
+ * - Sunday pay: proportional to hours worked in the week (fractional days,
+ *   each capped at 8h). 6 full days = full Sunday pay; a half day counts as 0.5
  * - Holiday pay: if employee works on a holiday, they earn 3x daily rate
  *   (regular day + 2 extra days)
  */
 
 import { isPeruHoliday, getDaysInMonth } from "./holidays";
+
+/** Minutes in a standard workday (8 hours) used to prorate daily pay. */
+const STANDARD_DAY_MINUTES = 8 * 60;
 
 export interface DailyAttendance {
   date: Date;
@@ -108,15 +113,20 @@ export function calculatePayroll(
       totalDaysWorked++;
       totalWorkedMinutes += day.workedMinutes;
 
+      // Regular pay is proportional to hours actually worked, capped at a
+      // full standard workday (8h). A half day pays half a daily rate; hours
+      // beyond 8 do not increase regular pay (they accrue as overtime/banked).
+      const dayFraction = Math.min(day.workedMinutes / STANDARD_DAY_MINUTES, 1);
+
       if (day.isHoliday) {
-        // Holiday worked: 3x daily rate (1 regular + 2 extra)
-        totalRegularPay += dailyRate;
-        totalHolidayBonus += dailyRate * 2;
+        // Holiday worked: proportional regular pay + 2x bonus on hours worked.
+        totalRegularPay += dailyRate * dayFraction;
+        totalHolidayBonus += dailyRate * 2 * dayFraction;
       } else {
-        totalRegularPay += dailyRate;
+        totalRegularPay += dailyRate * dayFraction;
       }
     } else if (day.isHoliday && day.date.getDay() !== 0) {
-      // Holidays are ALWAYS paid even if employee didn't work that week
+      // Holidays are ALWAYS paid in full even if employee didn't work that week
       totalRegularPay += dailyRate;
     }
   }
@@ -173,16 +183,22 @@ function calculateWeeks(
     // Count workdays (Mon-Sat) where employee was actually present.
     // A worked holiday is present, so it's already included here.
     // Holidays that were NOT worked do not count toward Sunday pay.
-    const daysWorked = days.filter(
-      (d) => !d.isSunday && d.present
-    ).length;
+    const presentDays = days.filter((d) => !d.isSunday && d.present);
+    const daysWorked = presentDays.length;
 
-    // Sunday pay is incremental: (daysWorked / 6) * dailyRate
-    // 1 day = 1/6, 2 days = 2/6, ..., 6 days = full daily rate
-    // 0 actual days worked = no Sunday pay
+    // Fractional days worked: each day counts by its hours (capped at 8h/day),
+    // so a half day contributes 0.5. Sunday pay tracks actual hours worked.
+    const fractionalDaysWorked = presentDays.reduce(
+      (sum, d) => sum + Math.min(d.workedMinutes / STANDARD_DAY_MINUTES, 1),
+      0
+    );
+
+    // Sunday pay is incremental and prorated by hours:
+    // (fractionalDaysWorked / 6) * dailyRate, capped at a full daily rate.
+    // 6 full days = full Sunday pay; 0 hours worked = no Sunday pay.
     let sundayPay = 0;
-    if (sundayInMonth && daysWorked > 0) {
-      sundayPay = (daysWorked / 6) * dailyRate;
+    if (sundayInMonth && fractionalDaysWorked > 0) {
+      sundayPay = Math.min(fractionalDaysWorked / 6, 1) * dailyRate;
     }
 
     const saturdayDates = days.filter((d) => d.date.getDay() === 6);
