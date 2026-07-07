@@ -5,13 +5,15 @@
  * - Monthly salary: S/ 1,130.00 (configurable per employee)
  * - Daily rate = monthlySalary / daysInMonth
  * - Work schedule: Mon-Sat, 8 hours/day, 48 hours/week
- * - Regular pay uses a monthly hours pool: all worked minutes on regular
- *   (non-holiday) Mon-Sat days are summed WITHOUT a per-day cap, so extra hours
- *   on one day cover short hours on another day anywhere in the month. Pay is the
- *   pool capped at the full monthly schedule (8h × those days); it never exceeds
- *   a full schedule.
- * - Hours bank ("horas a favor"): worked minutes beyond the full monthly
- *   schedule are NOT paid — they are saved as a balance the admin can see.
+ * - Regular pay uses a monthly hours pool over the days actually worked: their
+ *   worked minutes on regular (non-holiday) Mon-Sat days are summed WITHOUT a
+ *   per-day cap, so extra minutes on one day cover short minutes on another day
+ *   anywhere in the month. Pay is the pool capped at 8h per worked day; it never
+ *   exceeds a full 8h day of pay per worked day.
+ * - Hours bank ("horas a favor"): a running balance carried across months.
+ *   Extra minutes over 8h add to it; short days first spend this month's extra
+ *   and then the carried-in balance so the day is still paid full. Whatever is
+ *   left rolls forward to the next month. Pay never exceeds 8h per worked day.
  * - Sunday pay: proportional to hours worked in the week (fractional days,
  *   each capped at 8h). 6 full days = full Sunday pay; a half day counts as 0.5
  * - Holiday pay: if employee works on a holiday, they earn 3x daily rate
@@ -57,13 +59,14 @@ export interface PayrollResult {
   totalHolidayBonus: number;
   totalPay: number;
   totalWorkedMinutes: number;
-  /** Full regular schedule for the month in minutes (8h × non-holiday Mon-Sat days). */
+  /** Expected minutes for the month: 8h × number of regular days worked. */
   targetRegularMinutes: number;
-  /** Regular minutes actually paid this month (min of worked pool and target). */
+  /** Regular minutes actually paid this month (bank + worked, capped at target). */
   paidRegularMinutes: number;
   /**
-   * Leftover worked minutes after the whole month's 48h/week schedule is filled.
-   * These are NOT paid — they are saved to the hours bank ("horas a favor").
+   * Hours bank balance carried forward AFTER this month: the incoming bank plus
+   * this month's extra minutes, minus whatever was used to top up short days.
+   * These minutes are not paid until used; the balance rolls into next month.
    */
   bankMinutes: number;
 }
@@ -75,6 +78,9 @@ export interface PayrollResult {
  * @param year - Year
  * @param month - Month (1-12)
  * @param attendanceRecords - Map of date key (YYYY-MM-DD) to { present, workedMinutes, lunchMinutes }
+ * @param bankStartMinutes - Hours bank balance carried in from previous months.
+ *   It is added to this month's worked minutes so it can cover short days; the
+ *   leftover (bankMinutes) is the balance carried forward to next month.
  */
 export function calculatePayroll(
   employeeId: string,
@@ -82,7 +88,8 @@ export function calculatePayroll(
   monthlySalary: number,
   year: number,
   month: number,
-  attendanceRecords: Map<string, { present: boolean; workedMinutes: number; lunchMinutes: number }>
+  attendanceRecords: Map<string, { present: boolean; workedMinutes: number; lunchMinutes: number }>,
+  bankStartMinutes: number = 0
 ): PayrollResult {
   const daysInMonth = getDaysInMonth(year, month);
   const dailyRate = monthlySalary / daysInMonth;
@@ -146,21 +153,28 @@ export function calculatePayroll(
       continue;
     }
 
-    // Regular (non-holiday) Mon-Sat day: counts toward the monthly schedule.
-    scheduledRegularDays++;
+    // Regular (non-holiday) Mon-Sat day: only days the employee actually
+    // worked count toward the pool and the expected schedule. A worked day is
+    // expected to be 8h, so the bank is the net over/under across worked days.
+    // Absences simply don't count (they neither pay nor touch the bank).
     if (day.present) {
+      scheduledRegularDays++;
       totalDaysWorked++;
       totalWorkedMinutes += day.workedMinutes;
       pooledWorkedMinutes += day.workedMinutes;
     }
   }
 
+  // Expected minutes = 8h for every day actually worked this month.
   const targetRegularMinutes = scheduledRegularDays * STANDARD_DAY_MINUTES;
-  const paidRegularMinutes = Math.min(pooledWorkedMinutes, targetRegularMinutes);
-  const bankMinutes = Math.max(
-    0,
-    Math.round(pooledWorkedMinutes - targetRegularMinutes)
-  );
+
+  // The bank carried in from previous months is available to cover short days
+  // this month. We pay up to a full 8h for each worked day (never more), using
+  // this month's worked minutes plus the bank. Whatever is left over is the new
+  // bank balance carried forward to next month.
+  const availableMinutes = Math.round(bankStartMinutes + pooledWorkedMinutes);
+  const paidRegularMinutes = Math.min(availableMinutes, targetRegularMinutes);
+  const bankMinutes = Math.max(0, availableMinutes - paidRegularMinutes);
 
   const totalRegularPay =
     (paidRegularMinutes / STANDARD_DAY_MINUTES) * dailyRate + holidayRegularPay;

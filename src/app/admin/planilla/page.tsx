@@ -32,6 +32,7 @@ interface PayrollEmployee {
   totalWorkedMinutes: number;
   bankMinutes: number;
   accumulatedBankMinutes: number;
+  monthlyBankChange: number;
   deductions: Deduction[];
   totalDeductions: number;
   netPay: number;
@@ -272,9 +273,10 @@ export default function PlanillaPage() {
                       <span className="font-medium text-blue-700">
                         {formatHoursMinutes(emp.accumulatedBankMinutes)}
                       </span>
-                      {emp.bankMinutes > 0 && (
+                      {emp.monthlyBankChange !== 0 && (
                         <span className="block text-[11px] text-gray-400">
-                          +{formatHoursMinutes(emp.bankMinutes)} este mes
+                          {emp.monthlyBankChange > 0 ? "+" : "−"}
+                          {formatHoursMinutes(Math.abs(emp.monthlyBankChange))} este mes
                         </span>
                       )}
                     </td>
