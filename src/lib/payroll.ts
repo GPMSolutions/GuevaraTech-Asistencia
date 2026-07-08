@@ -14,10 +14,13 @@
  *   Extra minutes over 8h add to it; short days first spend this month's extra
  *   and then the carried-in balance so the day is still paid full. Whatever is
  *   left rolls forward to the next month. Pay never exceeds 8h per worked day.
- * - Sunday pay: proportional to hours worked in the week (fractional days,
- *   each capped at 8h). 6 full days = full Sunday pay; a half day counts as 0.5
- * - Holiday pay: if employee works on a holiday, they earn 3x daily rate
- *   (regular day + 2 extra days)
+ * - Sunday pay: based on the number of Mon-Sat days worked that week (by count,
+ *   not by hours — the hours bank already absorbs minute over/under). 6 days
+ *   worked = full Sunday pay; fewer days = proportional (daysWorked / 6).
+ * - Holiday pay: a worked holiday counts as a normal worked day for the hours
+ *   pool (its regular 1x pay comes from the pool and its minutes feed the bank)
+ *   AND earns a 2x holiday bonus, for 3x total. An unworked holiday is always
+ *   paid a full daily rate.
  */
 
 import { isPeruHoliday, getDaysInMonth } from "./holidays";
@@ -140,11 +143,15 @@ export function calculatePayroll(
 
     if (day.isHoliday) {
       if (day.present) {
+        // Worked holiday: counts as a regular worked day for the hours pool, so
+        // its regular 1x pay comes from the pool and its minutes net into the
+        // bank exactly like any other worked day. On top of that it earns a 2x
+        // holiday bonus (3x total for working a holiday).
+        scheduledRegularDays++;
         totalDaysWorked++;
         totalWorkedMinutes += day.workedMinutes;
-        // Worked holiday: proportional regular pay + 2x bonus on hours worked.
+        pooledWorkedMinutes += day.workedMinutes;
         const holidayFraction = Math.min(day.workedMinutes / STANDARD_DAY_MINUTES, 1);
-        holidayRegularPay += dailyRate * holidayFraction;
         totalHolidayBonus += dailyRate * 2 * holidayFraction;
       } else {
         // Holidays are ALWAYS paid in full even if the employee didn't work.
@@ -237,19 +244,13 @@ function calculateWeeks(
     const presentDays = days.filter((d) => !d.isSunday && d.present);
     const daysWorked = presentDays.length;
 
-    // Fractional days worked: each day counts by its hours (capped at 8h/day),
-    // so a half day contributes 0.5. Sunday pay tracks actual hours worked.
-    const fractionalDaysWorked = presentDays.reduce(
-      (sum, d) => sum + Math.min(d.workedMinutes / STANDARD_DAY_MINUTES, 1),
-      0
-    );
-
-    // Sunday pay is incremental and prorated by hours:
-    // (fractionalDaysWorked / 6) * dailyRate, capped at a full daily rate.
-    // 6 full days = full Sunday pay; 0 hours worked = no Sunday pay.
+    // Sunday pay is incremental by number of days worked (Mon-Sat):
+    // (daysWorked / 6) * dailyRate, capped at a full daily rate. 6 days worked =
+    // full Sunday pay; 0 days = no Sunday pay. Minute over/under on individual
+    // days is handled by the hours bank, not deducted from Sunday pay.
     let sundayPay = 0;
-    if (sundayInMonth && fractionalDaysWorked > 0) {
-      sundayPay = Math.min(fractionalDaysWorked / 6, 1) * dailyRate;
+    if (sundayInMonth && daysWorked > 0) {
+      sundayPay = Math.min(daysWorked / 6, 1) * dailyRate;
     }
 
     const saturdayDates = days.filter((d) => d.date.getDay() === 6);
