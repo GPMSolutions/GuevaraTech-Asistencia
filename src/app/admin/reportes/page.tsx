@@ -227,8 +227,8 @@ export default function ReportesPage() {
               (r) => r.dailySummaries.length > 0
             );
             if (!groupHasData) return null;
-            const groupTotalHours = group.report.reduce(
-              (sum, r) => sum + r.totalWorkHours,
+            const groupTotalMinutes = group.report.reduce(
+              (sum, r) => sum + r.totalWorkMinutes,
               0
             );
 
@@ -244,7 +244,7 @@ export default function ReportesPage() {
                     </span>
                   </h2>
                   <span className="text-sm text-gray-500">
-                    Total: {groupTotalHours.toFixed(1)}h
+                    Total: {formatMinutes(groupTotalMinutes)}
                   </span>
                 </div>
 
@@ -280,7 +280,7 @@ export default function ReportesPage() {
                             </div>
                             <div className="text-right">
                               <p className="text-2xl font-bold text-emerald-600">
-                                {empReport.totalWorkHours}h
+                                {formatMinutes(empReport.totalWorkMinutes)}
                               </p>
                             </div>
                           </button>
