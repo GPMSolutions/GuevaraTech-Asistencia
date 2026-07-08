@@ -86,10 +86,9 @@ export function generatePayslipPdf(
     left,
     y + 16
   );
-  const hours = Math.round((emp.totalWorkedMinutes / 60) * 100) / 100;
   doc.text(
-    `Días trabajados: ${emp.totalDaysWorked}   ·   Horas trabajadas: ${hours.toFixed(
-      2
+    `Días trabajados: ${emp.totalDaysWorked}   ·   Horas trabajadas: ${formatHoursMinutes(
+      emp.totalWorkedMinutes
     )}`,
     left,
     y + 32
