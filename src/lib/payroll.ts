@@ -1,26 +1,25 @@
 /**
  * Payroll calculation for Peru labor rules.
  *
- * Rules:
- * - Monthly salary: S/ 1,130.00 (configurable per employee)
- * - Daily rate = monthlySalary / daysInMonth
- * - Work schedule: Mon-Sat, 8 hours/day, 48 hours/week
- * - Regular pay uses a monthly hours pool over the days actually worked: their
- *   worked minutes on regular (non-holiday) Mon-Sat days are summed WITHOUT a
- *   per-day cap, so extra minutes on one day cover short minutes on another day
- *   anywhere in the month. Pay is the pool capped at 8h per worked day; it never
- *   exceeds a full 8h day of pay per worked day.
- * - Hours bank ("horas a favor"): a running balance carried across months.
- *   Extra minutes over 8h add to it; short days first spend this month's extra
- *   and then the carried-in balance so the day is still paid full. Whatever is
- *   left rolls forward to the next month. Pay never exceeds 8h per worked day.
- * - Sunday pay: based on the number of Mon-Sat days worked that week (by count,
- *   not by hours — the hours bank already absorbs minute over/under). 6 days
- *   worked = full Sunday pay; fewer days = proportional (daysWorked / 6).
- * - Holiday pay: a worked holiday counts as a normal worked day for the hours
- *   pool (its regular 1x pay comes from the pool and its minutes feed the bank)
- *   AND earns a 2x holiday bonus, for 3x total. An unworked holiday is always
- *   paid a full daily rate.
+ * This mirrors the customer's Excel exactly (Control de Asistencia):
+ * - Monthly salary: S/ 1,130.00 (configurable per employee).
+ * - Daily rate = monthlySalary / daysInMonth; per-minute rate = dailyRate / 480.
+ * - Work schedule: Mon-Sat, 8h/day. Sundays and holidays are paid rest days
+ *   already covered by the monthly salary.
+ * - Regular + Dominical together equal the full monthly salary when the employee
+ *   attends every working day. Concretely:
+ *     - Regular pay  = (present Mon-Sat working days + holidays in the month) × dailyRate.
+ *       Holidays are paid whether worked or not; an absent working day is simply
+ *       not counted (it lowers pay by one dailyRate). Short days (present but
+ *       under 8h) are NOT docked — the month is still paid full.
+ *     - Dominical pay = (Sundays whose week had attendance) × dailyRate. Each
+ *       Sunday is paid in full; there is no daysWorked/6 proration.
+ * - Bono Feriado: a worked holiday earns an extra 2 × workedMinutes × per-minute
+ *   rate (no 8h cap), on top of the day already being paid via the salary.
+ * - Horas a favor ("banco"): this month's surplus only, NOT carried across
+ *   months — the net of (workedMinutes − 8h) summed over the present working
+ *   days. It is shown for information and never added to pay.
+ * - No attendance at all in the month ⇒ everything is 0 (holidays alone do not pay).
  */
 
 import { isPeruHoliday, getDaysInMonth } from "./holidays";
@@ -62,14 +61,14 @@ export interface PayrollResult {
   totalHolidayBonus: number;
   totalPay: number;
   totalWorkedMinutes: number;
-  /** Expected minutes for the month: 8h × number of regular days worked. */
+  /** Expected minutes for the month: 8h × number of days worked (info only). */
   targetRegularMinutes: number;
-  /** Regular minutes actually paid this month (bank + worked, capped at target). */
+  /** Minutes actually worked toward the schedule (info only). */
   paidRegularMinutes: number;
   /**
-   * Hours bank balance carried forward AFTER this month: the incoming bank plus
-   * this month's extra minutes, minus whatever was used to top up short days.
-   * These minutes are not paid until used; the balance rolls into next month.
+   * Horas a favor for THIS month only (not carried forward): the net of
+   * (workedMinutes − 8h) summed over the present working days. Shown for
+   * information; never added to pay.
    */
   bankMinutes: number;
 }
@@ -81,9 +80,6 @@ export interface PayrollResult {
  * @param year - Year
  * @param month - Month (1-12)
  * @param attendanceRecords - Map of date key (YYYY-MM-DD) to { present, workedMinutes, lunchMinutes }
- * @param bankStartMinutes - Hours bank balance carried in from previous months.
- *   It is added to this month's worked minutes so it can cover short days; the
- *   leftover (bankMinutes) is the balance carried forward to next month.
  */
 export function calculatePayroll(
   employeeId: string,
@@ -91,11 +87,11 @@ export function calculatePayroll(
   monthlySalary: number,
   year: number,
   month: number,
-  attendanceRecords: Map<string, { present: boolean; workedMinutes: number; lunchMinutes: number }>,
-  bankStartMinutes: number = 0
+  attendanceRecords: Map<string, { present: boolean; workedMinutes: number; lunchMinutes: number }>
 ): PayrollResult {
   const daysInMonth = getDaysInMonth(year, month);
   const dailyRate = monthlySalary / daysInMonth;
+  const perMinuteRate = dailyRate / STANDARD_DAY_MINUTES;
 
   const attendance: DailyAttendance[] = [];
 
@@ -121,72 +117,70 @@ export function calculatePayroll(
     });
   }
 
-  // Calculate weekly summaries for Sunday pay
-  const weeks = calculateWeeks(attendance, dailyRate, year, month);
+  // Which ISO weeks have any attendance — a Sunday is only paid if its week
+  // was worked (so a fully-absent employee earns no Sunday pay).
+  const weekHasAttendance = new Set<string>();
+  for (const day of attendance) {
+    if (!day.isSunday && day.present) {
+      weekHasAttendance.add(getWeekMonday(day.date));
+    }
+  }
 
-  // Calculate totals
   let totalDaysWorked = 0;
   let totalHolidayBonus = 0;
   let totalWorkedMinutes = 0;
-
-  // Hours-bank pooling: total the worked minutes of all regular (non-holiday,
-  // Mon-Sat) days WITHOUT a per-day cap, so extra hours on one day fill in
-  // short hours on another day anywhere in the month. Regular pay is then
-  // based on the pool, capped at the full monthly schedule (8h × those days).
-  // Holidays are handled separately (always paid; worked holidays earn 3x).
-  let pooledWorkedMinutes = 0;
-  let scheduledRegularDays = 0;
-  let holidayRegularPay = 0;
+  let presentWorkingDays = 0; // present Mon-Sat, non-holiday
+  let holidayDaysInMonth = 0; // holidays on Mon-Sat, paid whether worked or not
+  let creditedSundays = 0; // Sundays whose week had attendance
+  let surplusMinutes = 0; // net (worked − 8h) over present working days
 
   for (const day of attendance) {
-    if (day.isSunday) continue;
-
-    if (day.isHoliday) {
-      if (day.present) {
-        // Worked holiday: counts as a regular worked day for the hours pool, so
-        // its regular 1x pay comes from the pool and its minutes net into the
-        // bank exactly like any other worked day. On top of that it earns a 2x
-        // holiday bonus (3x total for working a holiday).
-        scheduledRegularDays++;
-        totalDaysWorked++;
-        totalWorkedMinutes += day.workedMinutes;
-        pooledWorkedMinutes += day.workedMinutes;
-        const holidayFraction = Math.min(day.workedMinutes / STANDARD_DAY_MINUTES, 1);
-        totalHolidayBonus += dailyRate * 2 * holidayFraction;
-      } else {
-        // Holidays are ALWAYS paid in full even if the employee didn't work.
-        holidayRegularPay += dailyRate;
+    if (day.isSunday) {
+      // Each Sunday whose week was worked is paid a full daily rate.
+      if (weekHasAttendance.has(getWeekMonday(day.date))) {
+        creditedSundays++;
       }
       continue;
     }
 
-    // Regular (non-holiday) Mon-Sat day: only days the employee actually
-    // worked count toward the pool and the expected schedule. A worked day is
-    // expected to be 8h, so the bank is the net over/under across worked days.
-    // Absences simply don't count (they neither pay nor touch the bank).
+    if (day.isHoliday) {
+      // Holidays are paid rest days (covered by the monthly salary). If worked,
+      // they earn an extra 2 × workedMinutes at the per-minute rate.
+      holidayDaysInMonth++;
+      if (day.present) {
+        totalDaysWorked++;
+        totalWorkedMinutes += day.workedMinutes;
+        totalHolidayBonus += 2 * day.workedMinutes * perMinuteRate;
+      }
+      continue;
+    }
+
+    // Regular Mon-Sat working day.
     if (day.present) {
-      scheduledRegularDays++;
+      presentWorkingDays++;
       totalDaysWorked++;
       totalWorkedMinutes += day.workedMinutes;
-      pooledWorkedMinutes += day.workedMinutes;
+      surplusMinutes += day.workedMinutes - STANDARD_DAY_MINUTES;
     }
   }
 
-  // Expected minutes = 8h for every day actually worked this month.
-  const targetRegularMinutes = scheduledRegularDays * STANDARD_DAY_MINUTES;
+  const hasAttendance = totalDaysWorked > 0;
 
-  // The bank carried in from previous months is available to cover short days
-  // this month. We pay up to a full 8h for each worked day (never more), using
-  // this month's worked minutes plus the bank. Whatever is left over is the new
-  // bank balance carried forward to next month.
-  const availableMinutes = Math.round(bankStartMinutes + pooledWorkedMinutes);
-  const paidRegularMinutes = Math.min(availableMinutes, targetRegularMinutes);
-  const bankMinutes = Math.max(0, availableMinutes - paidRegularMinutes);
+  // Regular = worked working days + all holidays (paid whether worked or not),
+  // at one daily rate each. Dominical = full daily rate per credited Sunday.
+  // Together they equal the full monthly salary for a fully-attended month.
+  const totalRegularPay = hasAttendance
+    ? (presentWorkingDays + holidayDaysInMonth) * dailyRate
+    : 0;
+  const totalSundayPay = hasAttendance ? creditedSundays * dailyRate : 0;
 
-  const totalRegularPay =
-    (paidRegularMinutes / STANDARD_DAY_MINUTES) * dailyRate + holidayRegularPay;
+  // Horas a favor: this month's surplus only (never carried forward).
+  const bankMinutes = hasAttendance ? surplusMinutes : 0;
 
-  const totalSundayPay = weeks.reduce((sum, w) => sum + w.sundayPay, 0);
+  const weeks = calculateWeeks(attendance, dailyRate, weekHasAttendance);
+
+  const targetRegularMinutes = totalDaysWorked * STANDARD_DAY_MINUTES;
+  const paidRegularMinutes = totalWorkedMinutes;
   const totalPay = totalRegularPay + totalSundayPay + totalHolidayBonus;
 
   return {
@@ -212,13 +206,13 @@ export function calculatePayroll(
 }
 
 /**
- * Calculate Sunday pay based on days worked Mon-Sat each week.
+ * Per-week breakdown (informational). Each in-month Sunday whose week had any
+ * attendance is paid a full daily rate — matching the customer's Excel.
  */
 function calculateWeeks(
   attendance: DailyAttendance[],
   dailyRate: number,
-  _year: number,
-  _month: number
+  weekHasAttendance: Set<string>
 ): WeekSummary[] {
   const weeks: WeekSummary[] = [];
 
@@ -239,19 +233,12 @@ function calculateWeeks(
 
   for (const [weekKey, { days, sundayInMonth }] of weekMap) {
     // Count workdays (Mon-Sat) where employee was actually present.
-    // A worked holiday is present, so it's already included here.
-    // Holidays that were NOT worked do not count toward Sunday pay.
     const presentDays = days.filter((d) => !d.isSunday && d.present);
     const daysWorked = presentDays.length;
 
-    // Sunday pay is incremental by number of days worked (Mon-Sat):
-    // (daysWorked / 6) * dailyRate, capped at a full daily rate. 6 days worked =
-    // full Sunday pay; 0 days = no Sunday pay. Minute over/under on individual
-    // days is handled by the hours bank, not deducted from Sunday pay.
-    let sundayPay = 0;
-    if (sundayInMonth && daysWorked > 0) {
-      sundayPay = Math.min(daysWorked / 6, 1) * dailyRate;
-    }
+    // Each in-month Sunday is paid a full daily rate when its week was worked.
+    const sundayPay =
+      sundayInMonth && weekHasAttendance.has(weekKey) ? dailyRate : 0;
 
     const saturdayDates = days.filter((d) => d.date.getDay() === 6);
     const weekEnd = saturdayDates.length > 0
