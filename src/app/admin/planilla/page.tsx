@@ -273,12 +273,6 @@ export default function PlanillaPage() {
                       <span className="font-medium text-blue-700">
                         {formatHoursMinutes(emp.accumulatedBankMinutes)}
                       </span>
-                      {emp.monthlyBankChange !== 0 && (
-                        <span className="block text-[11px] text-gray-400">
-                          {emp.monthlyBankChange > 0 ? "+" : "−"}
-                          {formatHoursMinutes(Math.abs(emp.monthlyBankChange))} este mes
-                        </span>
-                      )}
                     </td>
                     <td className="px-3 py-3 text-right text-red-600">
                       {emp.totalDeductions > 0

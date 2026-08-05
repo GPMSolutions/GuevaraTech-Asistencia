@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculatePayroll, type PayrollResult } from "@/lib/payroll";
+import { calculatePayroll } from "@/lib/payroll";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -26,10 +26,11 @@ export async function GET(req: NextRequest) {
     select: { id: true, name: true, email: true, monthlySalary: true },
   });
 
+  const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
   const timeEntries = await prisma.timeEntry.findMany({
-    where: { timestamp: { lte: endDate } },
+    where: { timestamp: { gte: startDate, lte: endDate } },
     orderBy: { timestamp: "asc" },
   });
 
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
     const empEntries = timeEntries.filter((e) => e.userId === emp.id);
     const attendanceMap = buildAttendanceMap(empEntries);
 
-    const result = replayHoursBank(
+    const result = calculatePayroll(
       emp.id,
       emp.name,
       emp.monthlySalary,
@@ -95,55 +96,6 @@ export async function GET(req: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
-}
-
-/**
- * Replay payroll month-by-month from the first month with attendance up to the
- * selected month, carrying the hours-bank balance forward. Returns the selected
- * month's payroll result (result.bankMinutes is the current running balance).
- */
-function replayHoursBank(
-  employeeId: string,
-  employeeName: string,
-  monthlySalary: number,
-  year: number,
-  month: number,
-  attendanceMap: Map<string, { present: boolean; workedMinutes: number; lunchMinutes: number }>
-): PayrollResult {
-  let startYear = year;
-  let startMonth = month;
-  for (const key of attendanceMap.keys()) {
-    const [ky, km] = key.split("-").map(Number);
-    if (ky < startYear || (ky === startYear && km < startMonth)) {
-      startYear = ky;
-      startMonth = km;
-    }
-  }
-
-  let carried = 0;
-  let result: PayrollResult | null = null;
-  let y = startYear;
-  let m = startMonth;
-  for (let guard = 0; guard < 120; guard++) {
-    result = calculatePayroll(
-      employeeId,
-      employeeName,
-      monthlySalary,
-      y,
-      m,
-      attendanceMap,
-      carried
-    );
-    carried = result.bankMinutes;
-    if (y === year && m === month) break;
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-  }
-
-  return result!;
 }
 
 function buildAttendanceMap(
