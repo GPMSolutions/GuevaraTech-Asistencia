@@ -7,7 +7,7 @@
 ## Links
 
 - **Deployed application:** https://guevara-tech-asistencia-rouge.vercel.app
-- **Demo video (YouTube, unlisted):** _TODO – add link_
+- **Demo video (YouTube, unlisted):** https://youtu.be/6vkdz-S33ug
 - **Repository:** https://github.com/GPMSolutions/GuevaraTech-Asistencia
 
 ## What the application does
