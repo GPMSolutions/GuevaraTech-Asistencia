@@ -1,66 +1,122 @@
 # GuevaraTech - Sistema de Control de Asistencia
 
-Sistema web de control de asistencia y cálculo de planilla para empleados, diseñado para empresas en Perú.
+**Employee attendance & payroll web app** for a small business in Peru. Employees clock in/out (including lunch breaks) and administrators manage employees, view attendance reports, and calculate monthly payroll following Peruvian labor rules.
 
-## Funcionalidades
+> Built as a prototype for the ED1/ED2 project using AI coding tools (Devin, Claude Code). Nearly all code was generated with AI and iterated through GitHub pull requests.
 
-### Administrador
-- Agregar y eliminar empleados
-- Restablecer contraseñas
-- Ver reportes de asistencia (semanal/mensual)
-- Calcular y exportar planilla (CSV)
+## Links
 
-### Empleados
-- Registro de entrada (Clock In)
-- Salida y regreso de almuerzo
-- Registro de salida (Clock Out)
-- Ver actividad del día
+- **Deployed application:** _TODO – add Vercel/Netlify URL_
+- **Demo video (YouTube, unlisted):** _TODO – add link_
+- **Repository:** https://github.com/GPMSolutions/GuevaraTech-Asistencia
 
-## Reglas de Planilla (Perú)
+## What the application does
 
-- **Salario mensual**: S/ 1,130.00 por empleado
-- **Tarifa diaria**: salario mensual / días del mes (30 o 31)
-- **Horario**: Lunes a Sábado, 8 horas diarias, 48 horas semanales
-- **Pago dominical**: proporcional a los días trabajados en la semana
-  - 6/6 días = pago dominical completo
-  - 5/6 días = 5/6 del pago dominical
-  - etc.
-- **Feriados**: si un empleado trabaja en feriado, gana triple (tarifa regular + 2 extras)
-- **16 feriados de ley** del Perú incluidos
+### Administrator
+- Add, edit, and deactivate employees (CRUD on the `User` table)
+- Reset employee passwords
+- Manage holidays and deductions
+- View attendance reports (weekly / monthly), hours shown as `Xh Ym`
+- Calculate and export payroll (CSV / PDF)
 
-## Tecnologías
+### Employee
+- Log in / log out
+- Clock in, lunch out / lunch in, clock out
+- View the day's activity
+- Kiosk mode for a shared tablet at the entrance
 
-- **Frontend**: Next.js 16, React 19, Tailwind CSS
-- **Backend**: Next.js API Routes, Prisma ORM
-- **Base de datos**: PostgreSQL
-- **Autenticación**: NextAuth.js
+Users must be authenticated before creating or modifying any data. Admin-only API routes check the user's role on the server.
 
-## Configuración
+## Technologies used
 
-1. Clonar el repositorio
-2. Instalar dependencias:
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 16 (App Router), React 19, Tailwind CSS 4 |
+| Backend | Next.js API Routes, Prisma ORM 7 |
+| Database | **Supabase** (managed PostgreSQL) with Row-Level Security enabled on all tables |
+| Authentication | NextAuth.js (credentials provider, bcrypt-hashed passwords) |
+| Hosting | Vercel |
+| AI tools | Devin, Claude Code |
+
+### Database tables (Supabase / Prisma)
+
+- `User` – employees and admins (email, hashed password, role, monthly salary)
+- `TimeEntry` – clock in / lunch out / lunch in / clock out events
+- `Deduction` – per-month deductions per employee
+- `Holiday` – Peruvian legal holidays (paid 3x when worked)
+
+Schema: [`prisma/schema.prisma`](prisma/schema.prisma). Migrations: [`prisma/migrations`](prisma/migrations).
+
+## Project structure
+
+```
+src/
+  app/
+    login/          # login page
+    dashboard/      # employee clock in/out
+    admin/          # admin pages: employees, reports, payroll
+    kiosk/          # shared-device clock-in
+    api/            # REST endpoints (auth, employees, time-entries,
+                    #   payroll, reports, holidays, deductions, kiosk)
+  lib/              # auth config, prisma client, payroll rules
+prisma/
+  schema.prisma     # database models
+  migrations/       # SQL migrations (incl. RLS policies)
+  seed.ts           # test data
+```
+
+## Payroll rules (Peru)
+
+- **Monthly salary**: S/ 1,130.00 per employee by default (editable per employee)
+- **Daily rate**: monthly salary / days in the month (30 or 31)
+- **Schedule**: Monday–Saturday, 8 h/day, 48 h/week
+- **Sunday pay**: proportional to days worked that week (6/6 = full, 5/6 = 5/6, ...)
+- **Holidays**: working on a holiday pays triple (regular + 2 extra)
+- **16 Peruvian legal holidays** included
+
+## Setup instructions
+
+### Prerequisites
+- Node.js 20+
+- A free [Supabase](https://supabase.com) project (or any PostgreSQL database)
+
+### Steps
+
+1. Clone the repository
+   ```bash
+   git clone https://github.com/GPMSolutions/GuevaraTech-Asistencia.git
+   cd GuevaraTech-Asistencia
+   ```
+2. Install dependencies
    ```bash
    npm install
    ```
-3. Configurar variables de entorno:
+3. Configure environment variables
    ```bash
    cp .env.example .env
    ```
-4. Configurar la base de datos PostgreSQL y actualizar `DATABASE_URL`
-5. Ejecutar migraciones:
+   - `DATABASE_URL` – Supabase connection string (Project Settings → Database → Connection string, URI)
+   - `NEXTAUTH_SECRET` – any long random string (`openssl rand -base64 32`)
+   - `NEXTAUTH_URL` – `http://localhost:3000` locally, or your deployed URL
+4. Run migrations (creates the tables in Supabase)
    ```bash
-   npx prisma migrate dev
+   npx prisma migrate deploy
    ```
-6. (Opcional) Cargar datos de prueba:
+5. (Optional) Load test data
    ```bash
    npm run db:seed
    ```
-7. Iniciar el servidor:
+6. Start the dev server
    ```bash
    npm run dev
    ```
+   Open http://localhost:3000
 
-## Cuentas de Prueba (después del seed)
+### Test accounts (after seed)
 
 - **Admin**: admin@guevaratech.com / admin123
-- **Empleado**: carlos@guevaratech.com / empleado123
+- **Employee**: carlos@guevaratech.com / empleado123
+
+## Deployment
+
+Deployed on Vercel: import the GitHub repo, set the three environment variables above (`NEXTAUTH_URL` = the Vercel URL), and deploy. The build command (`prisma generate && next build`) is already configured in `package.json`.
