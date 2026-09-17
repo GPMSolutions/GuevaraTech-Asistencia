@@ -6,7 +6,7 @@
 
 ## Links
 
-- **Deployed application:** _TODO – add Vercel/Netlify URL_
+- **Deployed application:** https://guevara-tech-asistencia-rouge.vercel.app
 - **Demo video (YouTube, unlisted):** _TODO – add link_
 - **Repository:** https://github.com/GPMSolutions/GuevaraTech-Asistencia
 
